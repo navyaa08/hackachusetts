@@ -1,24 +1,25 @@
-# hackachusetts
-Hackachusetts @ UMass Amherst Oct 2026
+# 🛡️ SafeStop V2X
+
+**Hackathon:** Hackachusetts 2026 · UMass Amherst  
+**Challenge Track:** Civic Action  
+**Team members:** [Add all team member names — maximum 4]  
+**Demo video:** [Add public YouTube/Vimeo/Facebook Video/Youku URL after uploading]  
 
 ---
-
-# 🛡️ SafeStop V2X
 
 An interactive, browser-based **digital twin** for highway emergency warning and
 cooperative traffic response.
 
 **The problem.** When a driver has to slow or stop suddenly on a highway (a medical
-event, an eye emergency, a mechanical failure), hazard lights only reach the one or
-two cars directly behind — and only once they are close enough to see them. At
+event, an eye emergency, a mechanical failure), hazard lights can only warn drivers who are close enough to see them. At
 highway speed, drivers further back and in other lanes have no information and keep
 their speed, which is how rear-end collisions and pileups happen.
 
 **The idea.** With Vehicle-to-Everything (V2X) communication, a stopping vehicle can
-broadcast a digital hazard advisory to *all* nearby connected vehicles and to
+broadcast a digital hazard advisory to nearby connected vehicles within communication range and to
 roadside signs — including traffic that is still too far away to see the hazard.
-Those drivers get an earlier warning and can ease into a smooth, coordinated
-slowdown instead of braking hard at the last second.
+Those drivers can receive earlier warnings and begin a coordinated slowdown,
+subject to network conditions and traffic dynamics.
 
 SafeStop V2X simulates this and shows it side by side against today's
 "hazard-lights-only" reality, from **identical initial conditions**.
@@ -32,7 +33,11 @@ SafeStop V2X simulates this and shows it side by side against today's
 
 ## Run it
 
+Clone the public repository (or download and extract its ZIP), then run:
+
 ```bash
+git clone https://github.com/moonmoonmoonmoon/SafeStop-V2X.git
+cd SafeStop-V2X
 npm install
 npm run dev      # start the dev server (Vite) → open the printed localhost URL
 ```
@@ -61,8 +66,8 @@ Two highways run in lockstep from the same seed and the same starting traffic:
   unconnected cars.
 
 A live **metrics dashboard** compares the two: collisions, minimum time-to-collision
-(TTC), maximum braking deceleration, V2X warning lead time, and message delivery
-rate.
+(TTC), maximum braking deceleration, harsh-braking events, warning lead time,
+pull-over completion time, and message delivery rate.
 
 **Controls** let you change traffic density, mean speed, emergency timing, V2X
 penetration, network latency, packet loss, communication range, and the random
@@ -73,26 +78,41 @@ also a manual **Driver SOS** button.
 
 For a live pitch, use the two buttons in the blue **Presentation mode** bar:
 
-- **🎬 Demo Preset** — one click loads the curated stress scenario (`DEMO_PRESET_CONFIG`)
-  and starts it. Under these denser/faster conditions the hazard-only baseline
-  suffers a rear-end collision while the SafeStop V2X scenario avoids it — from the
-  same seed and identical starting traffic. Expected on-screen metrics:
+- **🎬 Demo Preset** — loads the curated stress scenario (`DEMO_PRESET_CONFIG`) and
+  starts the simulation. The two scenarios use the same seed and initial traffic.
+  The following values were observed in the October 24, 2026 demo screenshot;
+  **verify them again before recording**, since results may change if the code
+  or configuration changes:
 
-  | Metric | Hazard only | SafeStop V2X |
-  | --- | --- | --- |
-  | Collisions | **1** | **0** |
-  | Min time-to-collision | ~0.03 s | ~1.90 s |
-  | Max braking | 8.0 m/s² | 8.0 m/s² |
-  | Warning lead time | 0.0 s | ~5.5 s |
-  | Message delivery | — | ~95% |
+  | Metric | Hazard lights only | SafeStop V2X |
+  | --- | ---: | ---: |
+  | Collisions | **2** | **0** |
+  | Minimum time-to-collision | **0.0 s** | **1.9 s** |
+  | Maximum braking | 8.0 m/s² | 8.0 m/s² |
+  | Harsh-braking events | 3 | 3 |
+  | Warning lead time | 0.0 s (no V2X warning) | **13.3 s** |
+  | Pull-over completion | Not completed in the observed run | **13.5 s** |
+  | Message delivery | N/A — no V2X messages | **95%** |
+
+  **How to read these results:** In this simulated stress test, the V2X-assisted
+  scenario had fewer collisions, a higher minimum TTC, and a completed shoulder
+  pull-over. The two scenarios did **not** differ in maximum braking or the
+  number of harsh-braking events. The baseline UI may display 100% message
+  delivery, but that is not a meaningful delivery success rate when no V2X
+  messages are sent; it should be treated as **N/A**, not as a baseline advantage.
+  Warning lead time is measured from the first V2X warning to the emergency
+  vehicle reaching near-stop; it does not mean every vehicle receives the warning
+  13.3 seconds in advance. These are **simulation outcomes, not real-world safety
+  validation**.
 
 - **🔁 Reset Demo** — replays the current scenario from t=0 so you can run it again
   on stage. Because the sim is deterministic, every replay is identical.
 
 These numbers are produced by the simulation each run (read from
-`MetricsAccumulator`), not hardcoded. The exact `DEMO_PRESET_CONFIG` is asserted in
-`src/sim/__tests__/simulation.test.ts` (collision in baseline, strictly fewer in
-V2X, identical initial traffic, deterministic replay).
+`MetricsAccumulator`), not hardcoded. The `DEMO_PRESET_CONFIG` behavior is covered by
+`src/sim/__tests__/simulation.test.ts` as described in the existing project
+tests. Re-run `npm test` to confirm the checked-in implementation and its
+assertions match the final demo.
 
 ---
 
@@ -175,25 +195,26 @@ The impaired driver does not just stop dead in a travel lane — they attempt to
 When a connected vehicle in the target lane receives the advisory and is the
 emergency car's intended rear neighbor, it **yields**: it eases below the
 emergency car's speed to open the required merge gap (`YIELD_DECEL`). This is a
-mild, bounded speed reduction — not hard braking. The result is that in the V2X
-scenario the emergency vehicle reaches the shoulder **sooner** than in the
-hazard-only scenario, where it must wait for a rare natural gap.
+mild, bounded speed reduction — not hard braking. In the recorded demo, the V2X scenario completes the shoulder pull-over
+in **13.5 s**, while the hazard-only scenario does **not complete it during the
+observed run**. This comparison is specific to the demo configuration.
 
 ### Why max braking reads 8.0 m/s² in both scenarios
 
 `MAX_EMERGENCY_DECEL` (8.0 m/s², ~0.8 g) is a hard physical clamp on braking. In
 both scenarios at least one vehicle (a late-reacting follower, or in the stress
 preset the car that ultimately crashes) hits that clamp, so the **peak** braking
-is identical. The **harsh-braking events** metric — counting braking above
-`HARSH_BRAKING_THRESHOLD` while time-to-collision is below `NEAR_MISS_TTC` — shows
-how *often* dangerous, near-miss braking occurred, which differs sharply between
-the scenarios even when the single peak is the same.
+is identical. The **harsh-braking events** metric counts braking above
+`HARSH_BRAKING_THRESHOLD` while time-to-collision is below `NEAR_MISS_TTC`.
+In the recorded demo, this count was **3 in both scenarios**, so the result does
+not demonstrate an improvement on this metric.
 
 ### Deterministic replay
 
 The entire core draws randomness from a single seeded RNG and advances on a fixed
 timestep, so the **same config + seed reproduces a run exactly**. Both scenarios are
-built from the same seed, so the *only* difference between them is V2X.
+built from the same initial traffic; the comparison isolates the modeled V2X
+communication and the resulting cooperative responses.
 
 ---
 
@@ -278,3 +299,42 @@ optional next step is a **webcam-based MediaPipe eye monitor** that feeds the sa
 driver-state machine as an additional detection source — to be added only after the
 core demo is stable, and strictly as an *internal* signal subject to the same
 "brief signals never broadcast / Suspected never broadcasts" guarantees.
+
+---
+
+## How Kiro was used
+
+We used **Kiro IDE** to build and iteratively refine SafeStop V2X. We provided
+project requirements and follow-up feedback to help implement the interactive
+traffic simulation, V2X communication, roadside signs, presentation controls,
+and comparative safety metrics. We also used Kiro to inspect the existing
+code and document the actual architecture and requirements.
+
+The repository includes these project-specific Kiro artifacts:
+
+- `.kiro/steering/project.md` — project context, technical architecture, and
+  development conventions for Kiro.
+- `.kiro/specs/safestop-v2x/requirements.md` — documented functional
+  requirements.
+- `.kiro/specs/safestop-v2x/design.md` — documented technical design.
+
+The steering and spec documents were created/refined after the initial
+prototype, to accurately capture the implementation and support subsequent
+review. We do **not** claim that the entire project was originally built with
+a formal spec-driven workflow, or that we used hooks, MCP, property-based
+testing, or Kiro Powers unless separately verified.
+
+## Hackathon submission information
+
+- **Track:** Civic Action
+- **Team:** [Yanan Zhang, Gauri Kukreti, Navya Arora, Roma Nair]
+- **Team representative:** [Yanan Zhang]
+- **Public demo video:** [https://youtu.be/jyHVcv5qWn8]
+- **Public source repository:** https://github.com/navyaa08/hackachusetts
+- **Kiro artifacts:** `.kiro/steering/` and `.kiro/specs/safestop-v2x/`
+
+Before submitting, verify that the **selected public repository** contains
+all source files, assets, instructions, and the `.kiro` directory at its root;
+that `npm install`, `npm test`, and `npm run build` work; and that the public
+video shows the application running. If the team submits a different GitHub
+repository, replace the repository URL and clone command above.
